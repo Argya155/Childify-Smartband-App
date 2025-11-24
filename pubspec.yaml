@@ -1,0 +1,41 @@
+name: smartband_app
+description: "A new Flutter project."
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  google_fonts: ^6.1.0  # Untuk font modern
+  intl: ^0.19.0         # Untuk format tanggal (Senin, Nov 24)
+  cupertino_icons: ^1.0.8
+  flutter_svg: ^2.0.9
+  image_picker: ^1.0.7       # Untuk ambil foto dari galeri
+  path_provider: ^2.1.2      # Untuk cari lokasi penyimpanan aplikasi
+  shared_preferences: ^2.2.2 # Untuk simpan nama & path foto
+  path: ^1.9.0
+  flutter_blue_plus: ^1.31.17  # Untuk akses Bluetooth BLE
+  permission_handler: ^11.3.1  # Untuk izin lokasi & bluetooth di Android 12+
+  flutter_local_notifications: ^17.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icons/
+    - assets/images/
+
+flutter_icons:
+  android: "ic_launcher"
+  ios: true
+  image_path: "assets/images/icon_app.png" # <-- Pastikan path ini sesuai dengan lokasi file logo Anda
+  min_sdk_android: 21 # Mendukung Android modern
