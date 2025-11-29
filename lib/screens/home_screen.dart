@@ -509,21 +509,29 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     String formattedDate = DateFormat('EEEE, MMMM d', 'id_ID').format(DateTime.now());
 
+    // Mengambil ukuran layar saat ini
+    final Size size = MediaQuery.of(context).size;
+    final double screenHeight = size.height;
+    final double screenWidth = size.width;
+    final EdgeInsets padding = MediaQuery.of(context).padding; // Safe Area (Notch)
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Column(
         children: [
           // --- HEADER ---
           Container(
-            padding: const EdgeInsets.fromLTRB(24, 60, 24, 30),
+            width: double.infinity,
+            padding: EdgeInsets.fromLTRB(24, padding.top + 20, 24, 30),
             decoration: const BoxDecoration(
               gradient: AppColors.mainGradient,
               borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
             ),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text("Childify", style: AppStyles.headerTitle),
-                const SizedBox(height: 20),
+                SizedBox(height: screenHeight * 0.02),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -531,15 +539,23 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(formattedDate, style: AppStyles.dateText),
-                        Text(_childName, style: AppStyles.childName),
+                        // Gunakan ConstrainedBox agar nama panjang tidak overflow
+                        ConstrainedBox(
+                          constraints: BoxConstraints(maxWidth: screenWidth * 0.6),
+                          child: Text(
+                            _childName,
+                            style: AppStyles.childName,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ],
                     ),
                     CircleAvatar(
-                      radius: 28,
+                      radius: screenWidth * 0.07, // Ukuran avatar responsif
                       backgroundColor: Colors.white24,
                       backgroundImage: _profileImage != null ? FileImage(_profileImage!) : null,
                       child: _profileImage == null
-                          ? const Icon(Icons.person_outline, size: 32, color: Colors.white)
+                          ? Icon(Icons.person_outline, size: screenWidth * 0.08, color: Colors.white)
                           : null,
                     )
                   ],
@@ -555,107 +571,114 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 70),
+                  const Spacer(flex: 2),
                   DistanceCard(
                     isConnected: _isConnected,
                     distanceValue: _distanceStr,
                     statusText: _distanceStatus,
                   ),
-                  const SizedBox(height: 70),
+                  const Spacer(flex: 1),
                   HeartRateCard(
                     isConnected: _isConnected,
                     bpmValue: _heartRate,
                   ),
+                  const Spacer(flex: 3),
                 ],
               ),
             ),
           ),
 
           // --- BOTTOM CONTROL ---
-          Stack(
-            alignment: Alignment.bottomCenter,
-            children: [
-              ClipPath(
-                clipper: BottomCurveClipper(),
-                child: Container(
-                  height: 180,
-                  width: double.infinity,
-                  decoration: const BoxDecoration(
-                    gradient: AppColors.mainGradient,
+          SizedBox(
+            height: screenHeight * 0.25, // Tinggi area bawah sekitar 25% layar
+            child: Stack(
+              alignment: Alignment.bottomCenter,
+              children: [
+                // Background Lengkungan
+                ClipPath(
+                  clipper: BottomCurveClipper(),
+                  child: Container(
+                    height: screenHeight * 0.22, // Sedikit lebih pendek dari container utama
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      gradient: AppColors.mainGradient,
+                    ),
                   ),
                 ),
-              ),
 
-              Positioned(
-                bottom: 80,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // 1. TOMBOL BLUETOOTH
-                    ControlButton(
-                      icon: _isConnected
-                          ? Icons.bluetooth_connected
-                          : (_isScanning ? Icons.bluetooth_searching : Icons.bluetooth_disabled),
-                      iconColor: _isScanning
-                          ? Colors.orange
-                          : (_isConnected ? Colors.green : Colors.grey),
-                      onTap: _onBluetoothPressed,
-                    ),
-                    const SizedBox(width: 40),
+                // Tombol-tombol Kontrol
+                Positioned(
+                  bottom: screenHeight * 0.10, // Posisi tombol 10% dari bawah
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 1. TOMBOL BLUETOOTH
+                      ControlButton(
+                        icon: _isConnected
+                            ? Icons.bluetooth_connected
+                            : (_isScanning ? Icons.bluetooth_searching : Icons.bluetooth_disabled),
+                        iconColor: _isScanning
+                            ? Colors.orange
+                            : (_isConnected ? Colors.green : Colors.grey),
+                        onTap: _onBluetoothPressed,
+                      ),
 
-                    // 2. TOMBOL SIRINE (BUZZER)
-                    Transform.translate(
-                      offset: const Offset(0, -20),
-                      child: ControlButton(
-                        assetPath: 'assets/icons/siren_icon.svg',
-                        iconColor: _isAlarmActive
-                            ? const Color(0xFFEA3323) // Merah (Aktif)
-                            : AppColors.inactiveGrey, // Abu-abu (Mati)
-                        isProminent: true,
-                        isSvg: true,
-                        onTap: _toggleAlarm,
+                      SizedBox(width: screenWidth * 0.08), // Jarak horizontal responsif
+
+                      // 2. TOMBOL SIRINE
+                      Transform.translate(
+                        offset: const Offset(0, -20), // Efek naik sedikit
+                        child: ControlButton(
+                          assetPath: 'assets/icons/siren_icon.svg',
+                          iconColor: _isAlarmActive
+                              ? const Color(0xFFEA3323)
+                              : AppColors.inactiveGrey,
+                          isProminent: true,
+                          isSvg: true,
+                          onTap: _toggleAlarm,
+                        ),
+                      ),
+
+                      SizedBox(width: screenWidth * 0.08),
+
+                      // 3. TOMBOL SETTING
+                      ControlButton(
+                        icon: Icons.settings_outlined,
+                        iconColor: Colors.grey,
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                          );
+                          _loadPreferences();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
+                // --- STATUS BAR (Toast) ---
+                Positioned(
+                  bottom: screenHeight * 0.03, // 3% dari bawah
+                  child: AnimatedOpacity(
+                    opacity: _isStatusVisible ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 500),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 5)],
+                      ),
+                      child: Text(
+                        _getStatusText(),
+                        style: AppStyles.bottomStatus,
                       ),
                     ),
-
-                    const SizedBox(width: 40),
-
-                    // 3. TOMBOL SETTING
-                    ControlButton(
-                      icon: Icons.settings_outlined,
-                      iconColor: Colors.grey,
-                      onTap: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const SettingsScreen()),
-                        );
-                        _loadPreferences();
-                      },
-                    ),
-                  ],
-                ),
-              ),
-
-              // --- STATUS BAR ---
-              Positioned(
-                bottom: 30,
-                child: AnimatedOpacity(
-                  opacity: _isStatusVisible ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 500),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white54,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 5)],
-                    ),
-                    child: Text(
-                      _getStatusText(),
-                      style: AppStyles.bottomStatus,
-                    ),
                   ),
-                ),
-              )
-            ],
+                )
+              ],
+            ),
           ),
         ],
       ),
