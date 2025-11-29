@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -48,7 +49,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _isScanning = false;
   bool _isConnected = false;
-
   bool _isManualDisconnect = false;
 
   // Data Sensor
@@ -59,6 +59,10 @@ class _HomeScreenState extends State<HomeScreen> {
   // Variabel Moving Average Filter RSSI
   final List<int> _rssiBuffer = [];
   final int _rssiWindowSize = 10;
+
+  // Variabel Kalibrasi
+  int _txPower = -72; // Default, akan diupdate oleh kalibrasi
+  bool _isCalibrating = false; // Status sedang kalibrasi atau tidak
 
   // Data Pengguna & Pengaturan
   String _childName = "Name";
@@ -145,11 +149,74 @@ class _HomeScreenState extends State<HomeScreen> {
       _distanceLevel = prefs.getDouble('distance_level') ?? 0.0;
       _isNotificationOn = prefs.getBool('notification_on') ?? true;
       _isVibrationOn = prefs.getBool('vibration_on') ?? true;
+      _txPower = prefs.getInt('calibrated_tx_power') ?? -72;
     });
   }
 
-  // --- LOGIKA UTAMA BLE ---
+  // --- LOGIKA KALIBRASI JARAK ---
+  Future<void> _startCalibration() async {
+    if (!_isConnected) {
+      _showStatusMessage(message: "Hubungkan Perangkat Dulu!");
+      return;
+    }
 
+    // Tampilkan Dialog Konfirmasi
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Kalibrasi Jarak 1 Meter"),
+        content: const Text(
+            "Pegang HP dan Alat dengan jarak tepat 1 Meter.\n\n"
+                "Tekan 'Mulai' dan diamkan selama 3 detik untuk mengukur kekuatan sinyal."
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Batal")),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _processCalibration();
+            },
+            child: const Text("Mulai Kalibrasi"),
+          )
+        ],
+      ),
+    );
+  }
+
+  Future<void> _processCalibration() async {
+    setState(() {
+      _isCalibrating = true;
+      _rssiBuffer.clear(); // Bersihkan buffer untuk data baru
+    });
+
+    _showStatusMessage(message: "Sedang Kalibrasi... Tahan 1m");
+
+    // Tunggu 3 detik untuk mengumpulkan data RSSI di _rssiBuffer
+    // Data dikumpulkan otomatis oleh _startRssiStream -> _updateSmoothedDistance
+    await Future.delayed(const Duration(seconds: 3));
+
+    if (_rssiBuffer.isNotEmpty) {
+      // Hitung rata-rata RSSI yang didapat selama 3 detik
+      double avgRssi = _rssiBuffer.reduce((a, b) => a + b) / _rssiBuffer.length;
+      int newTxPower = avgRssi.round();
+
+      // Simpan ke SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('calibrated_tx_power', newTxPower);
+
+      setState(() {
+        _txPower = newTxPower;
+        _isCalibrating = false;
+      });
+
+      _showStatusMessage(message: "Kalibrasi Sukses! TxPower: $_txPower");
+    } else {
+      setState(() => _isCalibrating = false);
+      _showStatusMessage(message: "Gagal: Tidak ada data sinyal.");
+    }
+  }
+
+  // --- LOGIKA UTAMA BLE ---
   Future<bool> _checkPermissions() async {
     if (Platform.isAndroid) {
       Map<Permission, PermissionStatus> statuses = await [
@@ -324,6 +391,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _isScanning = false;
         _isAlarmActive = false;
         _isManualDisconnect = false;
+        _isCalibrating = false;
       });
 
       if (wasManual) {
@@ -394,14 +462,16 @@ class _HomeScreenState extends State<HomeScreen> {
       _rssiBuffer.removeAt(0);
     }
 
+    if (_isCalibrating) return;
+
     double avgRssi = _rssiBuffer.reduce((a, b) => a + b) / _rssiBuffer.length;
 
-    int txPower = -75;
-    double n = 2.5;
+    int txPower = _txPower;
+    double n = 3.0;
 
     double distance = pow(10, ((txPower - avgRssi) / (10 * n))).toDouble();
 
-    //if (avgRssi < -90) {
+    //if (avgRssi < -85) {
       //distance = 20.0; // Paksa set ke jarak jauh (di luar batas aman)
     //}
 
@@ -572,16 +642,58 @@ class _HomeScreenState extends State<HomeScreen> {
                 mainAxisAlignment: MainAxisAlignment.start,
                 children: [
                   const Spacer(flex: 2),
+
+                  // 1. DISTANCE CARD
                   DistanceCard(
                     isConnected: _isConnected,
                     distanceValue: _distanceStr,
                     statusText: _distanceStatus,
                   ),
-                  const Spacer(flex: 1),
+
+                  // 2. TOMBOL KALIBRASI (DI TENGAH)
+                  // Menggunakan AnimatedSize agar transisi smooth saat muncul/hilang
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 300),
+                    child: _isConnected
+                        ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      child: GestureDetector(
+                        onTap: _startCalibration,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: AppColors.inactiveGrey.withOpacity(0.3)),
+                              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))]
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.gps_fixed, size: 16, color: AppColors.primaryBlue),
+                              const SizedBox(width: 8),
+                              Text(
+                                  "Kalibrasi",
+                                  style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      color: AppColors.primaryBlue,
+                                      fontWeight: FontWeight.w600
+                                  )
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                        : const SizedBox(height: 20), // Placeholder jika tidak terhubung
+                  ),
+
+                  // 3. HEART RATE CARD
                   HeartRateCard(
                     isConnected: _isConnected,
                     bpmValue: _heartRate,
                   ),
+
                   const Spacer(flex: 3),
                 ],
               ),
